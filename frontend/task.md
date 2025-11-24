@@ -47,7 +47,7 @@
 | 页面路径 | 路由名称 | 组件路径 | 说明 |
 |---------|---------|---------|------|
 | `/dashboard/index` | `dashboard` | `src/views/dashboard/index.vue` | **系统首页** - 任务网格列表展示 |
-| `/task/index` | `task` | `src/views/workbench/index.vue` | 任务工作台主页面 |
+| `/task/index` | `task` | `src/views/workbench/index.vue` | **任务工作台** - Issue看板和任务管理 |
 | `/data/task` | - | `src/views/data/task/Task.vue` | 任务管理页面（数据维护） |
 
 ### 2.1.1 首页说明
@@ -57,6 +57,7 @@
 - **任务网格展示**: 以网格卡片形式展示所有根任务
 - **任务面板**: 每个任务卡片内嵌任务面板，支持查看和编辑
 - **布局切换**: 支持单列/双列布局切换（快捷键：Alt+1/Alt+2）
+- **新建根任务**: 支持在首页创建新的根任务（快捷键：Alt+N 或通过顶部菜单）
 - **实时协作**: 显示任务编辑的订阅者状态
 - **会议集成**: 支持会议预约和加入
 - **快捷操作**: 任务发布、删除、会议预约等操作入口
@@ -174,10 +175,34 @@ enum GridMode {
 1. **快捷键切换**: 
    - `Alt+1`: 切换到单列布局
    - `Alt+2`: 切换到双列布局
+   - 快捷键在首页 (`/dashboard/index`) 自动注册
 2. **用户设置切换**: 
    - 点击用户头像下拉菜单
    - 在"任务设置"区域选择布局模式
-   - 设置会持久化保存
+   - 设置会持久化保存到本地存储
+
+**布局切换实现**:
+
+首页通过 `DashboardIndex.vue` 注册快捷键监听：
+
+```typescript
+// src/views/dashboard/index.vue
+onMounted(() => {
+  window.addEventListener('keydown', (e) => {
+    // Alt+1 - 切换到单列布局
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === '1') {
+      e.preventDefault();
+      pageStateStore.setTaskGridMode(GridMode.SINGLE_COLUMN);
+    }
+    
+    // Alt+2 - 切换到双列布局
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === '2') {
+      e.preventDefault();
+      pageStateStore.setTaskGridMode(GridMode.DOUBLE_COLUMN);
+    }
+  });
+});
+```
 
 **布局模式对任务面板的影响**:
 - **单列模式**: 
@@ -264,19 +289,119 @@ enum GridMode {
 
 #### 2.3.3 任务工作台布局
 
+**页面路径**: `/task/index`
+
+**布局结构**:
+
 ```
-/task/index (工作台)
-├── PageHeader (标题栏)
-│   ├── 图标 + 标题
-│   └── 刷新按钮
-└── TaskGridList (任务网格列表)
-    ├── 网格布局控制
-    └── TaskPanelIndex (任务面板)
-        ├── TaskTreeViewMain (查看模式)
-        ├── TaskTreeEditMain (编辑模式)
-        ├── TaskTreeMeetingMain (会议模式)
-        └── IssueList (议题列表)
+任务工作台 (/task/index)
+└── PageWrapper (页面容器)
+    └── IssueDashboard (Issue看板)
+        ├── LayoutSider (左侧边栏, 宽度: 300px)
+        │   └── Menu (任务菜单)
+        │       ├── SubMenu: "进行中的根任务"
+        │       │   └── MenuItem (任务项)
+        │       │       ├── 任务标题
+        │       │       └── Issue统计 (closed/total)
+        │       └── SubMenu: "已完成的根任务" (可选显示)
+        │           └── MenuItem (任务项)
+        └── LayoutContent (主内容区)
+            ├── Tabs (标签页)
+            │   ├── TabPane: "任务" (task)
+            │   ├── TabPane: "议题" (issue)
+            │   └── TabPane: "会议摘要" (meeting)
+            └── 内容区域 (根据选中标签显示)
+                ├── 任务视图 (activeView === 'task')
+                │   └── TaskPanelIndex (任务面板)
+                │       └── TaskTreeViewMain (查看模式)
+                ├── 议题视图 (activeView === 'issue')
+                │   └── KanbanView (看板视图)
+                │       ├── 筛选工具栏
+                │       │   ├── 用户筛选下拉框
+                │       │   └── "新建Issue" 按钮
+                │       └── 看板列
+                │           ├── 待处理
+                │           ├── 处理中
+                │           └── 已关闭
+                └── 会议摘要视图 (activeView === 'meeting')
+                    └── List (会议列表)
+                        └── ListItem (会议项)
+                            ├── 会议标题
+                            ├── 参与者头像
+                            └── 会议时间
 ```
+
+**布局特点**:
+
+1. **左侧边栏** (300px 固定宽度):
+   - **任务菜单**: 树形菜单展示根任务
+   - **任务分组**: 
+     - "进行中的根任务": 显示未关闭的根任务
+     - "已完成的根任务": 根据设置显示已关闭的根任务
+   - **任务项信息**: 
+     - 任务标题
+     - Issue统计（已关闭/总数）
+   - **任务选择**: 点击任务项，右侧显示对应内容
+
+2. **主内容区** (自适应宽度):
+   - **标签页切换**:
+     - **任务标签**: 显示任务树（查看模式）
+     - **议题标签**: 显示Issue看板
+     - **会议摘要标签**: 显示关联的会议列表
+   - **议题视图工具栏**:
+     - 用户筛选下拉框（筛选特定用户的Issue）
+     - "新建Issue"按钮（为选中任务创建Issue）
+
+3. **议题看板视图**:
+   - **看板列**: 按状态分组显示Issue
+     - 待处理（Normal）
+     - 处理中（Processing）
+     - 已关闭（Closed）
+   - **Issue卡片**: 显示Issue标题、负责人、状态等信息
+   - **拖拽功能**: 支持拖拽Issue卡片改变状态
+
+**功能说明**:
+
+| 功能区域 | 功能说明 |
+|---------|---------|
+| **任务选择** | 左侧菜单选择根任务，右侧显示对应内容 |
+| **任务视图** | 显示选中任务的完整任务树（只读查看） |
+| **议题看板** | 看板形式展示任务的Issue，支持拖拽改变状态 |
+| **用户筛选** | 在议题视图中筛选特定用户的Issue |
+| **Issue创建** | 为选中任务快速创建Issue |
+| **会议摘要** | 查看任务关联的所有会议记录 |
+
+**工作台页面功能说明**:
+
+1. **任务选择**:
+   - 左侧菜单显示所有根任务
+   - 任务按状态分组（进行中/已完成）
+   - 显示每个任务的Issue统计
+   - 点击任务项，右侧显示对应内容
+
+2. **任务视图** (`activeView === 'task'`):
+   - 显示选中任务的完整任务树
+   - 使用 `TaskTreeViewMain` 组件（查看模式）
+   - 支持展开/折叠任务树
+   - 显示任务状态、负责人、金币等信息
+
+3. **议题视图** (`activeView === 'issue'`):
+   - **看板布局**: 按状态分列显示Issue
+   - **状态列**:
+     - 待处理（Normal）
+     - 处理中（Processing）
+     - 已关闭（Closed）
+   - **用户筛选**: 下拉框筛选特定用户的Issue
+   - **快速创建**: 点击"新建Issue"按钮快速创建
+   - **拖拽功能**: 支持拖拽Issue卡片改变状态
+
+4. **会议摘要视图** (`activeView === 'meeting'`):
+   - 显示任务关联的所有会议
+   - 会议列表包含：
+     - 会议标题（关联的任务标题）
+     - 参与者头像列表
+     - 会议时间
+   - 点击会议项查看会议详情
 
 ---
 
@@ -360,6 +485,67 @@ interface Props {
 - 任务选择和高亮
 - 会议状态显示
 - 订阅者状态显示
+- 新建根任务处理（监听全局事件）
+
+**任务卡片功能按钮说明**:
+
+每个任务卡片头部包含以下功能按钮，根据任务状态和用户权限动态显示：
+
+| 按钮 | 显示条件 | 说明 |
+|------|---------|------|
+| **协作编辑按钮** | 所有任务 | 显示任务编辑的订阅者状态，支持请求编辑权限 |
+| **删除按钮** | 1. 用户是任务分配人（assignor）<br>2. 任务状态不是：已发布、已成功、已中止、已失败 | 删除根任务（危险操作） |
+| **发布按钮** | 1. 用户是任务负责人（assignee）<br>2. 任务状态为 `ACCEPTED`（已接收） | 发布根任务，使其进入已发布状态 |
+| **会议预约按钮** | 1. 用户是任务分配人（assignor）<br>2. 任务状态为 `PUBLISHED`（已发布）<br>3. 任务不在会议中 | 为任务预约会议 |
+| **加入会议按钮** | 1. 任务状态为根任务（parent_id === 0）<br>2. 任务正在会议中（is_in_meeting === true） | 进入任务的会议模式 |
+| **取消会议按钮** | 1. 任务正在会议中<br>2. 用户是任务负责人（assignee） | 取消正在进行的会议 |
+
+**按钮显示逻辑代码**:
+
+```typescript
+// 删除按钮显示条件
+const deleteShow = (record) => {
+  return (
+    record.parent_id === 0 &&
+    userStore.getUserInfo.id === record.assignor_id &&
+    ![TaskState.STATUS_PUBLISHED, TaskState.STATUS_SUCCEEDED, 
+      TaskState.STATUS_ABORTED, TaskState.STATUS_FAILED].includes(record.status)
+  );
+};
+
+// 发布按钮显示条件
+const publishShow = (record) => {
+  return (
+    record.parent_id === 0 &&
+    userStore.getUserInfo.id === record.assignee_id &&
+    [TaskState.STATUS_ACCEPTED].includes(record.status)
+  );
+};
+
+// 会议预约按钮显示条件
+const meetingScheduleShow = (record) => {
+  return (
+    record.parent_id === 0 &&
+    record.assignor_id === userStore.getUserInfo.id &&
+    [TaskState.STATUS_PUBLISHED].includes(record.status) &&
+    !record.is_in_meeting
+  );
+};
+
+// 会议进行中按钮显示条件
+const meetingInProgressShow = (record) => {
+  return record.parent_id === 0 && record.is_in_meeting === true;
+};
+
+// 取消会议按钮显示条件
+const canCancelMeeting = (record) => {
+  return (
+    record.parent_id === 0 &&
+    record.is_in_meeting === true &&
+    userStore.getUserInfo.id === record.assignee_id
+  );
+};
+```
 
 #### 3.2.3 TaskPanelIndex
 
@@ -653,14 +839,7 @@ interface Props {
 - 会议笔记显示
 - WikiTask 投票功能
 
-**Props**:
-```typescript
-interface Props {
-  mode: TaskPanelMode
-  rootTask: RootTask
-  // ... 其他 props
-}
-```
+**Props**: 同 TaskTreeViewMain
 
 **实现逻辑**:
 
@@ -1050,38 +1229,99 @@ const loadTaskDetail = async (id: number) => {
    - 点击会议按钮预约/加入会议
 ```
 
-### 6.2 任务创建流程
+### 6.2 根任务创建流程
+
+首页支持创建新的根任务，有两种方式：
+
+#### 6.2.1 快捷键创建（推荐）
 
 ```
-1. 用户点击"创建任务"按钮
+1. 用户在首页按下快捷键 `Alt+N`
    ↓
-2. 打开任务创建Modal
+2. 系统检查是否在首页（`/dashboard/index`）
    ↓
-3. 调用 TaskOptionsApi 获取选项数据
-   - 任务类型列表
-   - 可选负责人列表
-   - 可用金币数量
+3. 调用 TaskCreateEmptyRootTaskApi 创建空根任务
+   - 项目ID：当前项目
+   - 标题：默认"空任务"
+   - 描述：默认"任务描述"
+   - 任务类型：0（功能设计）
    ↓
-4. 用户填写表单
-   - 任务标题（必填）
-   - 任务描述（必填）
-   - 任务类型
-   - 金币数量
-   - 货币类型
+4. 触发全局事件 `new-root-task-created`
+   ↓
+5. TaskGridList 监听事件并处理：
+   - 将新任务添加到列表开头
+   - 标记为手动创建的任务
+   - 初始化任务编辑状态（如果是未发布状态）
+   - 单列模式下自动滚动到顶部显示新任务
+   ↓
+6. 显示成功提示
+```
+
+**实现代码**:
+
+```typescript
+// src/layouts/default/index.vue
+async function createNewRootTask() {
+  // 只在主页时才能创建根任务
+  if (!unref(isHomePage)) {
+    message.warning(t('common.task_create_homepage_only'));
+    return;
+  }
+
+  try {
+    // 创建空的根任务
+    const { task: newTask } = await TaskCreateEmptyRootTaskApi({
+      task: {
+        project_id: projectStore.project.id,
+        title: t('common.empty_task'),
+        description: t('common.task_description'),
+        task_type: 0,
+      },
+    });
+
+    // 触发全局事件，通知 TaskGridList 组件
+    window.dispatchEvent(
+      new CustomEvent('new-root-task-created', {
+        detail: { ...newTask, children: [] },
+      }),
+    );
+
+    message.success(t('common.task_created_success'));
+  } catch (error) {
+    message.error(t('common.task_add_root') + '失败');
+  }
+}
+```
+
+#### 6.2.2 顶部菜单创建
+
+```
+1. 用户点击顶部菜单的"新建任务"按钮
+   ↓
+2. 执行与快捷键创建相同的流程
+```
+
+### 6.3 子任务创建流程
+
+在任务树中创建子任务：
+
+```
+1. 用户在任务树中点击"添加子任务"按钮（悬停显示）
+   ↓
+2. 显示内联编辑器
+   ↓
+3. 用户填写子任务信息
    - 负责人（必填）
+   - 金币（必填）
+   - 标题（必填）
+   - 描述（必填）
+   - 任务类型
    ↓
-5. 前端表单验证
-   - 标题不能为空
-   - 描述不能为空
-   - 金币数量 >= 0
+4. 前端表单验证
    ↓
-6. 调用 TaskCreateApi 创建任务
+5. 调用 TaskCreateApi 创建子任务
    ↓
-7. 成功后：
-   - 显示成功提示
-   - 关闭Modal
-   - 刷新任务列表
-   - 如果是在任务树中创建子任务，刷新任务树
+6. 成功后刷新任务树
 ```
 
 ### 6.3 任务状态流转流程
