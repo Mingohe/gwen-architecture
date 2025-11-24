@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+README*
+
+# Backend
+src/backend/tmp
+src/backend/log/*
+!src/backend/log/.keep
+src/backend/.bundle
+src/backend/vendor/bundle
+src/backend/node_modules
+src/backend/public/packs
+src/backend/public/packs-test
+src/backend/storage/*
+!src/backend/storage/.keep
+
+# Frontend
+src/frontend/node_modules
+src/frontend/dist
+src/frontend/.vite
+src/frontend/.DS_Store
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
