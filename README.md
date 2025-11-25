@@ -248,38 +248,18 @@ GWEN 系统的文档按照以下标准进行分类：
 
 ## 附录
 
-### A. 错误码规范
+### A. 开发规范文档
 
-```yaml
-错误码定义:
-  0: 成功
-  400: 参数错误
-  401: 未授权
-  403: 权限不足
-  404: 资源不存在
-  500: 服务器错误
-```
+- [REST API 接口规范](./organic_docs/backend/api_standards.md) - API 响应格式、错误处理、请求规范
+- [后端代码规范](./organic_docs/backend/coding_standards.md) - Ruby/Rails 代码规范、命名规范、文件组织
 
-### B. 通用响应格式
+### B. 错误码规范
 
-```typescript
-interface ApiResponse<T> {
-  code: number
-  message?: string
-  data: T
-}
-```
+详见 [REST API 接口规范](./organic_docs/backend/api_standards.md#4-错误码规范)
 
-### C. 分页格式
+### C. 通用响应格式
 
-```typescript
-interface Pagination {
-  current_page: number
-  per_page: number
-  total_pages: number
-  total_count: number
-}
-```
+详见 [REST API 接口规范](./organic_docs/backend/api_standards.md#2-标准响应格式)
 
 ---
 
