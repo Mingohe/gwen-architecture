@@ -1,0 +1,61 @@
+services:
+  # Backend Server (Rails + MariaDB + Redis + Sidekiq)
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    container_name: backend-dev
+    ports:
+      - "3200:3200"   # Rails server (包含 Sidekiq Web UI，如果通过路由挂载)
+      - "13306:3306" # MariaDB (外部访问)
+      - "6380:6379"  # Redis (外部访问)
+    environment:
+      - PORT=3200
+      - LOG_LEVEL=info
+      - REDIS_URL=redis://127.0.0.1:6379
+      - DB_HOST=127.0.0.1
+      - DB_PORT=3306
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=gwen_dev
+      - MYSQL_USER=gwen
+      - MYSQL_PASSWORD=123456
+      - RAILS_ENV=development
+      - RAILS_MASTER_KEY=cb84ac90b5830b1254c3ede9fcdd098f
+    volumes:
+      - ./src/backend:/rails
+      - mariadb_data:/var/lib/mysql
+      - redis_data:/var/lib/redis
+      - /rails/tmp
+      - /rails/log
+      - /rails/storage
+      - supervisor_logs:/var/log/supervisor
+    restart: unless-stopped
+    # 使用 supervisord 管理所有进程（mariadb, redis, rails, sidekiq）
+    # 所有日志都在 /var/log/supervisor/ 目录下
+
+  # Vue Development Server (Frontend)
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile.dev
+    container_name: frontend-dev
+    ports:
+      - "3201:3201"   # 外部访问 3201，内部也是 3201
+    environment:
+      - VITE_BACKEND_URL=http://localhost:3200        # 指向后端端口 3200
+      - VITE_PORT=3201
+      - VITE_PROXY=[["/api","http://backend:3200/"]]
+    volumes:
+      - ./src/frontend/src:/app/src
+      - ./src/frontend/public:/app/public
+      - /app/node_modules
+    depends_on:
+      - backend
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:
+  redis_data:
+  supervisor_logs:
